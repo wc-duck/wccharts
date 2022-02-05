@@ -32,29 +32,57 @@
 #include <QtCharts/QChartView>
 
 #include <QtCharts/QBarSeries>
+#include <QtCharts/QHorizontalBarSeries>
 #include <QtCharts/QBarSet>
 #include <QtCharts/QLegend>
 #include <QtCharts/QBarCategoryAxis>
 
 #include <QtCharts/QScatterSeries>
 
+// TODO: 
+// * add support for save png from button-press
+// * add support for config.json for the data!
+// * add support for config dimmensions (no hardcode!)
+// * add abillity to filter on type and category (better names needed)
+
+enum chart_type
+{
+	CHART_TYPE_BAR_VERTICAL,
+	CHART_TYPE_BAR_HORIZONTAL,
+	CHART_TYPE_SCATTER,
+
+	CHART_TYPE_CNT
+};
+
+const char* CHART_TYPE_NAME[CHART_TYPE_CNT] = {
+	"bar-vertical",
+	"bar-horizontal",
+	"scatter"
+};
+
 QT_CHARTS_USE_NAMESPACE
 
-static QBarSeries* readCSVHeader( const QString& line )
+chart_type chartTypeFromString(const QString& str)
+{
+	for(int i = 0; i < CHART_TYPE_CNT; ++i)
+		if(str == CHART_TYPE_NAME[i])
+			return (chart_type)i;
+	return CHART_TYPE_CNT;
+}
+
+static void readCSVHeader( const QString& line, QAbstractBarSeries* series )
 {
 	QStringList types = line.split(',');
 	types.pop_front();
 
-	QBarSeries* series = new QBarSeries();
 	for( QString& type : types )
 		series->append(new QBarSet(type));
-	return series;
 }
 
 static QString parseCSVLine( const QString& line, QList<QBarSet*>& sets )
 {
 	QStringList items = line.split(',');
-	QString category = items.takeFirst();
+	QString category = items.takeFirst().trimmed();
 
 	bool success;
 	for( int i = 0; i < items.size(); ++i )
@@ -85,6 +113,28 @@ static void expandYAxisRange( QChart* chart, float ratio )
 	chart->axisY()->setRange(0.0f, max_y + y_extra);
 }
 
+static void expandXAxisRange( QChart* chart, float ratio )
+{
+	float min_x =  100000.0f;
+	float max_x = -100000.0f;
+
+	for( QAbstractSeries* as : chart->series() )
+	{
+		QHorizontalBarSeries* s = qobject_cast<QHorizontalBarSeries*>(as);
+		for( const QBarSet* set : s->barSets() )
+		{
+			for( int i = 0; i < set->count(); ++i )
+			{
+				if( set->at(i) < min_x ) min_x = set->at(i);
+				if( set->at(i) > max_x ) max_x = set->at(i);
+			}
+		}
+	}
+
+	float x_extra = (max_x - min_x) * ratio;
+	chart->axisX()->setRange(0.0f, max_x + x_extra);
+}
+
 static void expandXYAxisRange( QChart* chart, float ratio )
 {
 	float min_x =  100000.0f;
@@ -111,15 +161,44 @@ static void expandXYAxisRange( QChart* chart, float ratio )
 	chart->axisY()->setRange(min_y - y_extra, max_y + y_extra);
 }
 
-static QChart* createBarChart( const QString& csv_data )
+static QChart* createBarHorizontalChart( const QString& csv_data )
 {
 	QStringList lines = csv_data.split('\n');
 
 	QStringList categories;
 
-	QBarSeries* series = readCSVHeader(lines.takeFirst());
+	QHorizontalBarSeries* series = new QHorizontalBarSeries();
+	readCSVHeader(lines.takeFirst(), series);
 	QList<QBarSet*> sets = series->barSets();
 
+	while(!lines.empty())
+		categories << parseCSVLine( lines.takeFirst(), sets );
+
+	QChart* chart = new QChart();
+	chart->addSeries(series);
+
+	QBarCategoryAxis *axis = new QBarCategoryAxis();
+	axis->append(categories);
+	chart->createDefaultAxes();
+	chart->setAxisY(axis, series);
+
+	chart->legend()->setVisible(true);
+	chart->legend()->setAlignment(Qt::AlignRight);
+
+	expandXAxisRange(chart, 0.05f);
+
+	return chart;
+}
+
+static QChart* createBarVerticalChart( const QString& csv_data )
+{
+	QStringList lines = csv_data.split('\n');
+
+	QBarSeries* series = new QBarSeries();
+	readCSVHeader(lines.takeFirst(), series);
+	QList<QBarSet*> sets = series->barSets();
+
+	QStringList categories;
 	while(!lines.empty())
 		categories << parseCSVLine( lines.takeFirst(), sets );
 
@@ -138,6 +217,7 @@ static QChart* createBarChart( const QString& csv_data )
 
 	return chart;
 }
+
 
 static int findScatterSeriesCount( const QStringList& lines )
 {
@@ -193,17 +273,22 @@ static QChart* createScatterChart( const QString& csv_data )
 
 struct WcGraphOptions
 {
-	QString input;
-	QString output;
-	QString type;
-	QString title;
+	QString    input;
+	QString    output;
+	chart_type type;
+	QString    title;
 };
 
 static bool parseOptions(WcGraphOptions* opts)
 {
-	QCommandLineOption outputOption("output", "if set the graph will be written to the file, otherwise the grap will be opened as an app.", "image-file",   QString());
-	QCommandLineOption typeOption  ("type",   "graph type to generate",                                                                     "bar, scatter", QString());
-	QCommandLineOption titleOption ("title",  "chart title, optional",                                                                      "string",       QString());
+	QStringList types;
+	for(const char* type_name : CHART_TYPE_NAME)
+		types << type_name;
+
+	QCommandLineOption outputOption("output", "if set the graph will be written to the file, "
+	                                          "otherwise the grap will be opened as an app.",  "image-file",    QString());
+	QCommandLineOption typeOption  ("type",   "graph type to generate",                        types.join(','), QString());
+	QCommandLineOption titleOption ("title",  "chart title, optional",                         "string",        QString());
 
 	QCommandLineParser parser;
 	parser.setApplicationDescription("Application to generate charts with QChart");
@@ -226,12 +311,12 @@ static bool parseOptions(WcGraphOptions* opts)
 	if( !args.isEmpty() )
 		opts->input = args[0];
 	opts->output = parser.value(outputOption);
-	opts->type   = parser.value(typeOption);
+	opts->type   = chartTypeFromString(parser.value(typeOption));
 	opts->title  = parser.value(titleOption);
 
-	if(opts->type != "bar" && opts->type != "scatter")
+	if(opts->type == CHART_TYPE_CNT)
 	{
-		qInfo("invalid chart-type, should be 'bar' or 'scatter'");
+		qInfo("%s", qUtf8Printable(QString("invalid chart-type, should be any of [%0]").arg(types.join(", "))));
 		return false;
 	}
 
@@ -254,6 +339,36 @@ static QString readInput(QString input)
 	}
 }
 
+class WCChartsWin : public QMainWindow
+{
+	public:
+	WCChartsWin() = default;
+
+	void keyPressEvent(QKeyEvent* event)
+	{
+		if(event->key() == Qt::Key_Escape)
+			QCoreApplication::quit();
+		else
+			QWidget::keyPressEvent(event);
+	}
+};
+
+static QChart* createChart(const WcGraphOptions& opts)
+{
+	QString file_data = readInput(opts.input);
+
+	QChart* chart = nullptr;
+	switch(opts.type)
+	{
+		case CHART_TYPE_BAR_VERTICAL:   return createBarVerticalChart(file_data);
+		case CHART_TYPE_BAR_HORIZONTAL: return createBarHorizontalChart(file_data);
+		case CHART_TYPE_SCATTER:        return createScatterChart(file_data);
+		default:
+			Q_ASSERT(false);
+	}
+	return nullptr;
+}
+
 int main( int argc, char** argv )
 {
 	QApplication a(argc, argv);
@@ -264,12 +379,7 @@ int main( int argc, char** argv )
 	if( !parseOptions(&opts) )
 		return EXIT_FAILURE;
 
-	QString file_data = readInput(opts.input);
-
-	QChart* chart = nullptr;
-	if( opts.type == "bar" )     chart = createBarChart(file_data);
-	if( opts.type == "scatter" ) chart = createScatterChart(file_data);
-
+	QChart* chart = createChart(opts);
 	if(!opts.title.isNull())
 		chart->setTitle(opts.title);
 
@@ -281,7 +391,7 @@ int main( int argc, char** argv )
 	{
 		chart->setAnimationOptions(QChart::SeriesAnimations);
 
-		QMainWindow window;
+		WCChartsWin window;
 		window.setCentralWidget(chartView);
 		window.resize(1024, 768);
 		window.show();
@@ -292,5 +402,4 @@ int main( int argc, char** argv )
 		chartView->grab().save(opts.output);
 		return EXIT_SUCCESS;
 	}
-
 }
