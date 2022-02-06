@@ -171,12 +171,14 @@ static void expandXYAxisRange( QChart* chart, float ratio )
 	chart->axisY()->setRange(min_y - y_extra, max_y + y_extra);
 }
 
-static QChart* createBarHorizontalChart( const QString& csv_data )
+static QChart* createBarChart( const QString& csv_data, chart_type type )
 {
 	WcChartBarData bar_data;
 	readBarCSV(csv_data, &bar_data);
 
-	QHorizontalBarSeries* series = new QHorizontalBarSeries();
+	QAbstractBarSeries* series = type == CHART_TYPE_BAR_HORIZONTAL 
+											? (QAbstractBarSeries*)new QHorizontalBarSeries
+											: (QAbstractBarSeries*)new QBarSeries;
 
 	for(QBarSet* set : bar_data.sets)
 		series->append(set);
@@ -189,33 +191,36 @@ static QChart* createBarHorizontalChart( const QString& csv_data )
 	chart->createDefaultAxes();
 	chart->setAxisY(axis, series);
 
-	expandXAxisRange(chart, 0.05f);
+	if(type == CHART_TYPE_BAR_HORIZONTAL)
+		expandXAxisRange(chart, 0.05f);
+	else
+		expandYAxisRange(chart, 0.05f);
 
 	return chart;
 }
 
-static QChart* createBarVerticalChart( const QString& csv_data )
-{
-	WcChartBarData bar_data;
-	readBarCSV(csv_data, &bar_data);
-
-	QBarSeries* series = new QBarSeries();
-
-	for(QBarSet* set : bar_data.sets)
-		series->append(set);
-
-	QChart* chart = new QChart();
-	chart->addSeries(series);
-
-	QBarCategoryAxis *axis = new QBarCategoryAxis();
-	axis->append(bar_data.categories);
-	chart->createDefaultAxes();
-	chart->setAxisX(axis, series);
-
-	expandYAxisRange(chart, 0.05f);
-
-	return chart;
-}
+// static QChart* createBarVerticalChart( const QString& csv_data )
+// {
+// 	WcChartBarData bar_data;
+// 	readBarCSV(csv_data, &bar_data);
+// 
+// 	QBarSeries* series = new QBarSeries();
+// 
+// 	for(QBarSet* set : bar_data.sets)
+// 		series->append(set);
+// 
+// 	QChart* chart = new QChart();
+// 	chart->addSeries(series);
+// 
+// 	QBarCategoryAxis *axis = new QBarCategoryAxis();
+// 	axis->append(bar_data.categories);
+// 	chart->createDefaultAxes();
+// 	chart->setAxisX(axis, series);
+// 
+// 	expandYAxisRange(chart, 0.05f);
+// 
+// 	return chart;
+// }
 
 
 static int findScatterSeriesCount( const QStringList& lines )
@@ -354,8 +359,8 @@ static QChart* createChart(const WcGraphOptions& opts)
 
 		switch(opts.type)
 		{
-			case CHART_TYPE_BAR_VERTICAL:   return createBarVerticalChart(file_data);
-			case CHART_TYPE_BAR_HORIZONTAL: return createBarHorizontalChart(file_data);
+			case CHART_TYPE_BAR_VERTICAL:   return createBarChart(file_data, opts.type);
+			case CHART_TYPE_BAR_HORIZONTAL: return createBarChart(file_data, opts.type);
 			case CHART_TYPE_SCATTER:        return createScatterChart(file_data);
 			default:
 				Q_ASSERT(false);
