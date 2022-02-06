@@ -80,25 +80,66 @@ struct WcChartBarData
 
 static void readBarCSV( const QString& csv_data, WcChartBarData* out_data )
 {
+	QStringList wanted_categories;
+	wanted_categories << "generic" << "memcpy";
+
+	QStringList wanted_types;
+	wanted_types << "gcc -O0";
+	// wanted_types << "-O2";
+
 	QStringList lines = csv_data.split('\n');
 
-	out_data->types = lines.takeFirst().split(',');
-	out_data->types.pop_front();
+	QStringList type_names = lines.takeFirst().split(',');
+	type_names.pop_front();
+	for(QString& s : type_names)
+		s = s.trimmed();
 
-	for( QString& type : out_data->types )
-		out_data->sets.append(new QBarSet(type));
+	auto want_this = [](QString& t, QStringList& match)
+	{
+		if(match.empty())
+			return true;
+		
+		for(QString& w : match)
+			if(t.contains(w))
+				return true;
+		return false;
+	};
+
+	QList<int> type_indices;
+	for(int i = 0; i < type_names.size(); ++i)
+	{
+		if(want_this(type_names[i], wanted_types))
+			type_indices.append(i);
+	}
+
+	for(int i : type_indices)
+	{
+		out_data->types.append(type_names[i]);
+		out_data->sets.append(new QBarSet(type_names[i]));
+	}
 
 	while(!lines.empty())
 	{
 		QStringList items = lines.takeFirst().split(',');
 
-		out_data->categories << items.takeFirst().trimmed();
+		// TODO: verify items-size here!
 
-		bool success;
-		for( int i = 0; i < items.size(); ++i )
-			out_data->sets[i]->append(items[i].toFloat(&success));
+		QString category = items.takeFirst().trimmed();
+		if(want_this(category, wanted_categories))
+		{
+			out_data->categories.append(category);
 
-		// TODO: handle parse error here!
+			for(int type_idx = 0; type_idx < type_indices.size(); ++type_idx)
+			{
+				QBarSet* set = out_data->sets[type_idx];
+				QString& val = items[type_indices[type_idx]];
+
+				bool success;
+				set->append(val.toFloat(&success));
+			}
+			// TODO: handle parse error here!
+		}
+
 	}
 }
 
@@ -133,14 +174,9 @@ static QChart* createBarChart( const QString& csv_data, chart_type type )
 	WcChartBarData bar_data;
 	readBarCSV(csv_data, &bar_data);
 
-	QAbstractBarSeries* series = type == CHART_TYPE_BAR_HORIZONTAL 
+	QAbstractBarSeries* series = type == CHART_TYPE_BAR_HORIZONTAL
 											? (QAbstractBarSeries*)new QHorizontalBarSeries
 											: (QAbstractBarSeries*)new QBarSeries;
-
-	QStringList wanted_categories;
-	wanted_categories << "generic" << "memcpy";
-
-	// QStringList wanted_sets;
 
 	for(QBarSet* set : bar_data.sets)
 		series->append(set);
@@ -150,13 +186,7 @@ static QChart* createBarChart( const QString& csv_data, chart_type type )
 
 	QBarCategoryAxis* axis = new QBarCategoryAxis();
 
-	for(QString& cat : bar_data.categories)
-	{
-		if(wanted_categories.contains(cat))
-		{
-			axis->append(cat);
-		}
-	}
+	axis->append(bar_data.categories);
 	chart->createDefaultAxes();
 
 	auto expand_range = [](QAbstractAxis* axis){
@@ -237,7 +267,7 @@ static bool parseOptions(WcGraphOptions* opts)
 {
 	QStringList types;
 	for(const char* type_name : CHART_TYPE_NAME)
-		types << type_name;
+		types.append(type_name);
 
 	QCommandLineOption outputOption("output", "if set the graph will be written to the file, "
 	                                          "otherwise the grap will be opened as an app.",  "image-file",    QString());
