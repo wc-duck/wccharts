@@ -36,6 +36,7 @@
 #include <QtCharts/QBarSet>
 #include <QtCharts/QLegend>
 #include <QtCharts/QBarCategoryAxis>
+#include <QtCharts/QValueAxis>
 
 #include <QtCharts/QScatterSeries>
 
@@ -101,50 +102,6 @@ static void readBarCSV( const QString& csv_data, WcChartBarData* out_data )
 	}
 }
 
-static void expandYAxisRange( QChart* chart, float ratio )
-{
-	float min_y =  100000.0f;
-	float max_y = -100000.0f;
-
-	for( QAbstractSeries* as : chart->series() )
-	{
-		QBarSeries* s = qobject_cast<QBarSeries*>(as);
-		for( const QBarSet* set : s->barSets() )
-		{
-			for( int i = 0; i < set->count(); ++i )
-			{
-				if( set->at(i) < min_y ) min_y = set->at(i);
-				if( set->at(i) > max_y ) max_y = set->at(i);
-			}
-		}
-	}
-
-	float y_extra = (max_y - min_y) * ratio;
-	chart->axisY()->setRange(0.0f, max_y + y_extra);
-}
-
-static void expandXAxisRange( QChart* chart, float ratio )
-{
-	float min_x =  100000.0f;
-	float max_x = -100000.0f;
-
-	for( QAbstractSeries* as : chart->series() )
-	{
-		QHorizontalBarSeries* s = qobject_cast<QHorizontalBarSeries*>(as);
-		for( const QBarSet* set : s->barSets() )
-		{
-			for( int i = 0; i < set->count(); ++i )
-			{
-				if( set->at(i) < min_x ) min_x = set->at(i);
-				if( set->at(i) > max_x ) max_x = set->at(i);
-			}
-		}
-	}
-
-	float x_extra = (max_x - min_x) * ratio;
-	chart->axisX()->setRange(0.0f, max_x + x_extra);
-}
-
 static void expandXYAxisRange( QChart* chart, float ratio )
 {
 	float min_x =  100000.0f;
@@ -186,18 +143,24 @@ static QChart* createBarChart( const QString& csv_data, chart_type type )
 	QChart* chart = new QChart();
 	chart->addSeries(series);
 
-	QBarCategoryAxis *axis = new QBarCategoryAxis();
+	QBarCategoryAxis* axis = new QBarCategoryAxis();
 	axis->append(bar_data.categories);
 	chart->createDefaultAxes();
 
+	auto expand_range = [](QAbstractAxis* axis){
+		QValueAxis* value_axis = qobject_cast<QValueAxis*>(axis);
+		float val = value_axis->max() + ((value_axis->max() - value_axis->min()) * 0.05f);
+		value_axis->setRange(0.0f, val);
+	};
+
 	if(type == CHART_TYPE_BAR_HORIZONTAL)
 	{
-		expandXAxisRange(chart, 0.05f);
+		expand_range(chart->axisX());
 		chart->setAxisY(axis, series);
 	}
 	else
 	{
-		expandYAxisRange(chart, 0.05f);
+		expand_range(chart->axisY());
 		chart->setAxisX(axis, series);
 	}
 
