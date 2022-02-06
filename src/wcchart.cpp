@@ -189,39 +189,20 @@ static QChart* createBarChart( const QString& csv_data, chart_type type )
 	QBarCategoryAxis *axis = new QBarCategoryAxis();
 	axis->append(bar_data.categories);
 	chart->createDefaultAxes();
-	chart->setAxisY(axis, series);
 
 	if(type == CHART_TYPE_BAR_HORIZONTAL)
+	{
 		expandXAxisRange(chart, 0.05f);
+		chart->setAxisY(axis, series);
+	}
 	else
+	{
 		expandYAxisRange(chart, 0.05f);
+		chart->setAxisX(axis, series);
+	}
 
 	return chart;
 }
-
-// static QChart* createBarVerticalChart( const QString& csv_data )
-// {
-// 	WcChartBarData bar_data;
-// 	readBarCSV(csv_data, &bar_data);
-// 
-// 	QBarSeries* series = new QBarSeries();
-// 
-// 	for(QBarSet* set : bar_data.sets)
-// 		series->append(set);
-// 
-// 	QChart* chart = new QChart();
-// 	chart->addSeries(series);
-// 
-// 	QBarCategoryAxis *axis = new QBarCategoryAxis();
-// 	axis->append(bar_data.categories);
-// 	chart->createDefaultAxes();
-// 	chart->setAxisX(axis, series);
-// 
-// 	expandYAxisRange(chart, 0.05f);
-// 
-// 	return chart;
-// }
-
 
 static int findScatterSeriesCount( const QStringList& lines )
 {
