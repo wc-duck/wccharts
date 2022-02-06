@@ -85,12 +85,14 @@ chart_type chartTypeFromString(const QString& str)
 
 struct WcGraphOptions
 {
-	QString     input;      //<
-	QString     output;     //<
-	chart_type  type;       //<
-	QString     title;      //<
-	QStringList sets;       //<
-	QStringList categories; //<
+	QString     input;        //<
+	QString     output;       //<
+	chart_type  type;         //<
+	QString     title;        //<
+	QString     title_axis_x; //<
+	QString     title_axis_y; //<
+	QStringList sets;         //<
+	QStringList categories;   //<
 };
 
 
@@ -273,12 +275,14 @@ static bool parseOptions(WcGraphOptions* opts)
 	for(const char* type_name : CHART_TYPE_NAME)
 		types.append(type_name);
 
-	QCommandLineOption outputOption  ("output",   "if set the graph will be written to the file, "
-	                                              "otherwise the grap will be opened as an app.",  "image-file",    QString());
-	QCommandLineOption typeOption    ("type",     "graph type to generate",                        types.join(','), QString());
-	QCommandLineOption titleOption   ("title",    "chart title, optional",                         "string",        QString());
-	QCommandLineOption setsOption    ("set",      "TODO:",                                         "string",        QString());
-	QCommandLineOption categoryOption("category", "TODO:",                                         "string",        QString());
+	QCommandLineOption outputOption    ("output",       "if set the graph will be written to the file, "
+	                                                    "otherwise the grap will be opened as an app.",  "image-file",    QString());
+	QCommandLineOption typeOption      ("type",         "graph type to generate",                        types.join(','), QString());
+	QCommandLineOption titleOption     ("title",        "chart title, optional",                         "string",        QString());
+	QCommandLineOption titleAxisXOption("title-axis-x", "chart title, optional",                         "string",        QString());
+	QCommandLineOption titleAxisYOption("title-axis-y", "chart title, optional",                         "string",        QString());
+	QCommandLineOption setsOption      ("set",          "TODO:",                                         "string",        QString());
+	QCommandLineOption categoryOption  ("category",     "TODO:",                                         "string",        QString());
 
 	QCommandLineParser parser;
 	parser.setApplicationDescription("Application to generate charts with QChart");
@@ -288,6 +292,8 @@ static bool parseOptions(WcGraphOptions* opts)
 	parser.addOption(outputOption);
 	parser.addOption(typeOption);
 	parser.addOption(titleOption);
+	parser.addOption(titleAxisXOption);
+	parser.addOption(titleAxisYOption);
 	parser.addOption(setsOption);
 	parser.addOption(categoryOption);
 
@@ -302,11 +308,13 @@ static bool parseOptions(WcGraphOptions* opts)
 
 	if( !args.isEmpty() )
 		opts->input = args[0];
-	opts->output     = parser.value(outputOption);
-	opts->type       = chartTypeFromString(parser.value(typeOption));
-	opts->title      = parser.value(titleOption);
-	opts->sets       = parser.values(setsOption);
-	opts->categories = parser.values(categoryOption);
+	opts->output       = parser.value(outputOption);
+	opts->type         = chartTypeFromString(parser.value(typeOption));
+	opts->title        = parser.value(titleOption);
+	opts->title_axis_x = parser.value(titleAxisXOption);
+	opts->title_axis_y = parser.value(titleAxisYOption);
+	opts->sets         = parser.values(setsOption);
+	opts->categories   = parser.values(categoryOption);
 
 	if(opts->type == CHART_TYPE_CNT)
 	{
@@ -369,8 +377,8 @@ static QChart* createChart(const WcGraphOptions& opts)
 	chart->legend()->setVisible(true);
 	chart->legend()->setAlignment(Qt::AlignRight);
 
-	chart->axisX()->setTitleText("x axis, don't hardcode me!");
-	chart->axisY()->setTitleText("y axis, don't hardcode me!");
+	if(!opts.title_axis_x.isEmpty()) chart->axisX()->setTitleText(opts.title_axis_x);
+	if(!opts.title_axis_y.isEmpty()) chart->axisY()->setTitleText(opts.title_axis_y);
 
 	return chart;
 }
