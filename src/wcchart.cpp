@@ -71,6 +71,17 @@ chart_type chartTypeFromString(const QString& str)
 	return CHART_TYPE_CNT;
 }
 
+struct WcGraphOptions
+{
+	QString     input;      //<
+	QString     output;     //<
+	chart_type  type;       //<
+	QString     title;      //<
+	QStringList sets;       //<
+	QStringList categories; //<
+};
+
+
 struct WcChartBarData
 {
 	QStringList     types;      // TODO: better name!
@@ -78,44 +89,37 @@ struct WcChartBarData
 	QList<QBarSet*> sets;       // TODO: better name!
 };
 
-static void readBarCSV( const QString& csv_data, WcChartBarData* out_data )
+static void readBarCSV( const QString& csv_data, const QStringList& wanted_sets, const QStringList& wanted_categories, WcChartBarData* out_data )
 {
-	QStringList wanted_categories;
-	wanted_categories << "generic" << "memcpy";
-
-	QStringList wanted_types;
-	wanted_types << "gcc -O0";
-	// wanted_types << "-O2";
-
 	QStringList lines = csv_data.split('\n');
 
-	QStringList type_names = lines.takeFirst().split(',');
-	type_names.pop_front();
-	for(QString& s : type_names)
+	QStringList set_names = lines.takeFirst().split(',');
+	set_names.pop_front();
+	for(QString& s : set_names)
 		s = s.trimmed();
 
-	auto want_this = [](QString& t, QStringList& match)
+	auto want_this = [](const QString& t, const QStringList& match)
 	{
 		if(match.empty())
 			return true;
 		
-		for(QString& w : match)
+		for(const QString& w : match)
 			if(t.contains(w))
 				return true;
 		return false;
 	};
 
 	QList<int> type_indices;
-	for(int i = 0; i < type_names.size(); ++i)
+	for(int i = 0; i < set_names.size(); ++i)
 	{
-		if(want_this(type_names[i], wanted_types))
+		if(want_this(set_names[i], wanted_sets))
 			type_indices.append(i);
 	}
 
 	for(int i : type_indices)
 	{
-		out_data->types.append(type_names[i]);
-		out_data->sets.append(new QBarSet(type_names[i]));
+		out_data->types.append(set_names[i]);
+		out_data->sets.append(new QBarSet(set_names[i]));
 	}
 
 	while(!lines.empty())
@@ -169,10 +173,10 @@ static void expandXYAxisRange( QChart* chart, float ratio )
 	chart->axisY()->setRange(min_y - y_extra, max_y + y_extra);
 }
 
-static QChart* createBarChart( const QString& csv_data, chart_type type )
+static QChart* createBarChart( const QString& csv_data, chart_type type, const WcGraphOptions& opts )
 {
 	WcChartBarData bar_data;
-	readBarCSV(csv_data, &bar_data);
+	readBarCSV(csv_data, opts.sets, opts.categories, &bar_data);
 
 	QAbstractBarSeries* series = type == CHART_TYPE_BAR_HORIZONTAL
 											? (QAbstractBarSeries*)new QHorizontalBarSeries
@@ -255,24 +259,18 @@ static QChart* createScatterChart( const QString& csv_data )
 	return chart;
 }
 
-struct WcGraphOptions
-{
-	QString    input;
-	QString    output;
-	chart_type type;
-	QString    title;
-};
-
 static bool parseOptions(WcGraphOptions* opts)
 {
 	QStringList types;
 	for(const char* type_name : CHART_TYPE_NAME)
 		types.append(type_name);
 
-	QCommandLineOption outputOption("output", "if set the graph will be written to the file, "
-	                                          "otherwise the grap will be opened as an app.",  "image-file",    QString());
-	QCommandLineOption typeOption  ("type",   "graph type to generate",                        types.join(','), QString());
-	QCommandLineOption titleOption ("title",  "chart title, optional",                         "string",        QString());
+	QCommandLineOption outputOption  ("output",   "if set the graph will be written to the file, "
+	                                              "otherwise the grap will be opened as an app.",  "image-file",    QString());
+	QCommandLineOption typeOption    ("type",     "graph type to generate",                        types.join(','), QString());
+	QCommandLineOption titleOption   ("title",    "chart title, optional",                         "string",        QString());
+	QCommandLineOption setsOption    ("set",      "TODO:",                                         "string",        QString());
+	QCommandLineOption categoryOption("category", "TODO:",                                         "string",        QString());
 
 	QCommandLineParser parser;
 	parser.setApplicationDescription("Application to generate charts with QChart");
@@ -282,6 +280,8 @@ static bool parseOptions(WcGraphOptions* opts)
 	parser.addOption(outputOption);
 	parser.addOption(typeOption);
 	parser.addOption(titleOption);
+	parser.addOption(setsOption);
+	parser.addOption(categoryOption);
 
 	parser.process(*qApp);
 
@@ -294,9 +294,11 @@ static bool parseOptions(WcGraphOptions* opts)
 
 	if( !args.isEmpty() )
 		opts->input = args[0];
-	opts->output = parser.value(outputOption);
-	opts->type   = chartTypeFromString(parser.value(typeOption));
-	opts->title  = parser.value(titleOption);
+	opts->output     = parser.value(outputOption);
+	opts->type       = chartTypeFromString(parser.value(typeOption));
+	opts->title      = parser.value(titleOption);
+	opts->sets       = parser.values(setsOption);
+	opts->categories = parser.values(categoryOption);
 
 	if(opts->type == CHART_TYPE_CNT)
 	{
@@ -345,8 +347,8 @@ static QChart* createChart(const WcGraphOptions& opts)
 
 		switch(opts.type)
 		{
-			case CHART_TYPE_BAR_VERTICAL:   return createBarChart(file_data, opts.type);
-			case CHART_TYPE_BAR_HORIZONTAL: return createBarChart(file_data, opts.type);
+			case CHART_TYPE_BAR_VERTICAL:   return createBarChart(file_data, opts.type, opts);
+			case CHART_TYPE_BAR_HORIZONTAL: return createBarChart(file_data, opts.type, opts);
 			case CHART_TYPE_SCATTER:        return createScatterChart(file_data);
 			default:
 				Q_ASSERT(false);
