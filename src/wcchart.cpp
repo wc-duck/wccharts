@@ -137,6 +137,11 @@ static QChart* createBarChart( const QString& csv_data, chart_type type )
 											? (QAbstractBarSeries*)new QHorizontalBarSeries
 											: (QAbstractBarSeries*)new QBarSeries;
 
+	QStringList wanted_categories;
+	wanted_categories << "generic" << "memcpy";
+
+	// QStringList wanted_sets;
+
 	for(QBarSet* set : bar_data.sets)
 		series->append(set);
 
@@ -144,7 +149,14 @@ static QChart* createBarChart( const QString& csv_data, chart_type type )
 	chart->addSeries(series);
 
 	QBarCategoryAxis* axis = new QBarCategoryAxis();
-	axis->append(bar_data.categories);
+
+	for(QString& cat : bar_data.categories)
+	{
+		if(wanted_categories.contains(cat))
+		{
+			axis->append(cat);
+		}
+	}
 	chart->createDefaultAxes();
 
 	auto expand_range = [](QAbstractAxis* axis){
