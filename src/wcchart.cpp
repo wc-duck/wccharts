@@ -46,6 +46,18 @@
 // * add support for config dimmensions (no hardcode!)
 // * add abillity to filter on type and category (better names needed)
 
+// ---------------------------------------//
+// bar-chart format                       //
+// ---------------------------------------//
+//
+// <ignored>, category1, category2, ..., category n-1, category n
+// set1     ,     float,     float, ...,        float,      float
+// set2     ,     float,     float, ...,        float,      float
+// set3     ,     float,     float, ...,        float,      float
+// ....     ,     float,     float, ...,        float,      float
+// set n-1  ,     float,     float, ...,        float,      float
+// set n    ,     float,     float, ...,        float,      float
+
 enum chart_type
 {
 	CHART_TYPE_BAR_VERTICAL,
@@ -84,9 +96,8 @@ struct WcGraphOptions
 
 struct WcChartBarData
 {
-	QStringList     types;      // TODO: better name!
-	QStringList     categories; // TODO: better name!
-	QList<QBarSet*> sets;       // TODO: better name!
+	QStringList     categories;
+	QList<QBarSet*> sets;
 };
 
 static void readBarCSV( const QString& csv_data, const QStringList& wanted_sets, const QStringList& wanted_categories, WcChartBarData* out_data )
@@ -117,10 +128,7 @@ static void readBarCSV( const QString& csv_data, const QStringList& wanted_sets,
 	}
 
 	for(int i : type_indices)
-	{
-		out_data->types.append(set_names[i]);
 		out_data->sets.append(new QBarSet(set_names[i]));
-	}
 
 	while(!lines.empty())
 	{
